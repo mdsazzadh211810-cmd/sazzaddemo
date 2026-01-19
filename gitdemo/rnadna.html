@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcription Cycle Visualization</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 { color: #2c3e50; }
+        
+        #canvas-container {
+            position: relative;
+            margin: 20px auto;
+            width: 800px;
+            height: 400px;
+            background-color: white;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            transition: 0.3s;
+        }
+
+        .btn-init { background-color: #3498db; }
+        .btn-elon { background-color: #e67e22; }
+        .btn-term { background-color: #e74c3c; }
+        .btn-reset { background-color: #7f8c8d; }
+
+        button:hover { opacity: 0.8; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        #info-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e8f6f3;
+            border-left: 5px solid #1abc9c;
+            text-align: left;
+            width: 760px;
+            margin-left: auto;
+            margin-right: auto;
+            min-height: 80px;
+        }
+
+        #step-title { font-weight: bold; font-size: 1.2em; color: #2c3e50; }
+        #step-desc { color: #555; }
+    </style>
+</head>
+<body>
+
+    <h1>Transcription Process Visualization</h1>
+    <p>আপনার স্লাইডের ওপর ভিত্তি করে তৈরি (RNA Polymerase & Transcription Cycle)</p>
+
+    <div id="canvas-container">
+        <canvas id="transcriptionCanvas" width="800" height="400"></canvas>
+    </div>
+
+    <div id="info-panel">
+        <div id="step-title">অবস্থা: অপেক্ষা করছি</div>
+        <div id="step-desc">নিচের বাটনগুলোতে ক্লিক করে ট্রান্সক্রিপশনের ধাপগুলো দেখুন।</div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-init" onclick="startInitiation()" id="btnInit">1. Initiation</button>
+        <button class="btn-elon" onclick="startElongation()" id="btnElon" disabled>2. Elongation</button>
+        <button class="btn-term" onclick="startTermination()" id="btnTerm" disabled>3. Termination</button>
+        <button class="btn-reset" onclick="resetSim()">Reset</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('transcriptionCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Configuration
+        const centerY = 200;
+        let polyX = 100; // Polymerase position
+        let polyY = centerY;
+        let rnaLength = 0;
+        let phase = 'idle'; // idle, init, elongation, termination
+        let animationId;
+        
+        // Colors from your slides
+        const colorDNA = '#7f8c8d'; // Grey
+        const colorPolymerase = '#8e44ad'; // Purple
+        const colorRNA = '#27ae60'; // Green
+
+        // Texts
+        const infoTitle = document.getElementById('step-title');
+        const infoDesc = document.getElementById('step-desc');
+        const btnInit = document.getElementById('btnInit');
+        const btnElon = document.getElementById('btnElon');
+        const btnTerm = document.getElementById('btnTerm');
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw DNA (The Grey Rods)
+            drawDNA();
+
+            // 2. Draw RNA (The Green Line) - Only if length > 0
+            if (rnaLength > 0) {
+                drawRNA();
+            }
+
+            // 3. Draw RNA Polymerase (The Purple Shape)
+            drawPolymerase();
+        }
+
+        function drawDNA() {
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = colorDNA;
+            ctx.lineCap = 'round';
+
+            // Top Strand
+            ctx.beginPath();
+            ctx.moveTo(50, centerY - 15);
+            
+            // Bubble effect inside polymerase
+            if (phase !== 'idle' && phase !== 'terminated_detached') {
+                ctx.lineTo(polyX - 30, centerY - 15);
+                ctx.bezierCurveTo(polyX, centerY - 35, polyX + 40, centerY - 35, polyX + 70, centerY - 15);
+                ctx.lineTo(750, centerY - 15);
+            } else {
+                ctx.lineTo(750, centerY - 15);
+            }
+            ctx.stroke();
+
+            // Bottom Strand
+            ctx.beginPath();
+            ctx.moveTo(50, centerY + 15);
+            
+            // Bubble effect
+            if (phase !== 'idle' && phase !== 'terminated_detached') {
+                ctx.lineTo(polyX - 30, centerY + 15);
+                ctx.bezierCurveTo(polyX, centerY + 35, polyX + 40, centerY + 35, polyX + 70, centerY + 15);
+                ctx.lineTo(750, centerY + 15);
+            } else {
+                ctx.lineTo(750, centerY + 15);
+            }
+            ctx.stroke();
+
+            // Base pairs (lines in between)
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#bdc3c7';
+            for(let i=60; i<740; i+=10) {
+                // Don't draw lines inside the polymerase bubble area
+                if ((phase === 'idle' || phase === 'terminated_detached') || (i < polyX - 20 || i > polyX + 60)) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, centerY - 15);
+                    ctx.lineTo(i, centerY + 15);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function drawPolymerase() {
+            if (phase === 'terminated_detached') {
+                // Move polymerase away
+                polyY -= 2; 
+            }
+
+            ctx.fillStyle = colorPolymerase;
+            
+            // Drawing a kidney bean shape similar to slide
+            ctx.beginPath();
+            ctx.ellipse(polyX + 20, polyY, 50, 60, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // The active site groove
+            ctx.fillStyle = '#6c3483';
+            ctx.beginPath();
+            ctx.ellipse(polyX + 20, polyY, 20, 20, 0, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        function drawRNA() {
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = colorRNA;
+            ctx.beginPath();
+
+            let startX = polyX; 
+            let startY = centerY;
+
+            // If terminated, RNA falls off
+            let yOffset = 0;
+            if (phase === 'terminated_detached') {
+                startY += 2; // Falls down
+                startX -= 1; // Drifts left
+                yOffset = (Date.now() / 10) % 100 * 0.5; // Simulate falling
+            }
+
+            ctx.moveTo(startX, startY);
+
+            // Draw a wavy green line coming out
+            // As polymerase moves right, RNA gets longer and trails left
+            for (let i = 0; i < rnaLength; i++) {
+                let wave = Math.sin(i * 0.1) * 10;
+                let rnaX = startX - i * 1.5;
+                let rnaY = startY + i * 0.5 + wave + 20; // +20 to make it hang out like the slide
+                
+                if (phase === 'terminated_detached') {
+                    rnaY += 50; // Drop it down
+                }
+
+                ctx.lineTo(rnaX, rnaY);
+            }
+            ctx.stroke();
+        }
+
+        // --- Animation Logic ---
+
+        function startInitiation() {
+            phase = 'init';
+            polyX = 100;
+            polyY = centerY;
+            rnaLength = 0;
+            
+            updateInfo("1. Initiation (শুরু)", "RNA Polymerase ডিএনএ-এর প্রোমোটার অংশে এসে বসলো এবং ডিএনএ-এর প্যাঁচ খুলতে শুরু করলো (Unwinding)।");
+            
+            btnInit.disabled = true;
+            btnElon.disabled = false;
+            
+            animate();
+        }
+
+        function startElongation() {
+            phase = 'elongation';
+            updateInfo("2. Elongation (লম্বাকরণ)", "স্লাইড অনুযায়ী: পলিমারেজ সামনে এগোচ্ছে, ডিএনএ প্যাঁচ খুলছে এবং পেছনে আবার জোড়া লাগছে (Re-annealing)। সবুজ RNA চেইনটি লম্বা হয়ে বেরিয়ে আসছে।");
+            
+            btnElon.disabled = true;
+            btnTerm.disabled = false;
+        }
+
+        function startTermination() {
+            phase = 'termination';
+            updateInfo("3. Termination (সমাপ্তি)", "টার্মিনেটর সিকোয়েন্সে পৌঁছানোর পর পলিমারেজ থেমে যাচ্ছে।");
+            
+            setTimeout(() => {
+                phase = 'terminated_detached';
+                updateInfo("3. Termination (মুক্ত হওয়া)", "স্লাইড অনুযায়ী: পলিমারেজ এনজাইম আলাদা হয়ে যাচ্ছে এবং তৈরি হওয়া RNA মুক্ত হয়ে যাচ্ছে।");
+                btnTerm.disabled = true;
+            }, 2000);
+        }
+
+        function resetSim() {
+            phase = 'idle';
+            polyX = 100;
+            polyY = centerY;
+            rnaLength = 0;
+            btnInit.disabled = false;
+            btnElon.disabled = true;
+            btnTerm.disabled = true;
+            updateInfo("রিসেট সম্পন্ন", "আবার শুরু করতে Initiation বাটনে চাপ দিন।");
+            draw();
+            cancelAnimationFrame(animationId);
+        }
+
+        function updateInfo(title, desc) {
+            infoTitle.innerText = title;
+            infoDesc.innerText = desc;
+        }
+
+        function animate() {
+            if (phase === 'elongation') {
+                if (polyX < 600) {
+                    polyX += 1; // Move Right
+                    rnaLength += 0.8; // Grow RNA
+                } else {
+                    // Auto switch to ready for termination if end reached
+                     // keep looping but stop moving
+                }
+            }
+            
+            draw();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Initial draw
+        draw();
+
+    </script>
+</body>
+</html>
